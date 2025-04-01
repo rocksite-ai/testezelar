@@ -31,10 +31,10 @@ def adicionar_transacao(usuario, tipo, valor, descricao, data):
     conn.close()
 
 # Função para atualizar transação
-def atualizar_transacao(transacao_id, novo_valor, nova_descricao):
+def atualizar_transacao(transacao_id, novo_valor, nova_descricao, nova_data):
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
-    cursor.execute("UPDATE transacoes SET valor=?, descricao=? WHERE id=?", (novo_valor, nova_descricao, transacao_id))
+    cursor.execute("UPDATE transacoes SET valor=?, descricao=?, data=? WHERE id=?", (novo_valor, nova_descricao, nova_data, transacao_id))
     conn.commit()
     conn.close()
 
@@ -125,8 +125,9 @@ elif escolha == "Login":
             with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}"):
                 novo_valor = st.number_input("Novo Valor", min_value=0.0, value=t[3], format="%.2f", key=f"valor_{t[0]}")
                 nova_descricao = st.text_input("Nova Descrição", value=t[4], key=f"desc_{t[0]}")
+                nova_data = st.text_input("Nova Data e Hora (AAAA-MM-DD HH:MM:SS)", value=t[1], key=f"data_{t[0]}")
                 if st.button("Atualizar", key=f"update_{t[0]}"):
-                    atualizar_transacao(t[0], novo_valor, nova_descricao)
+                    atualizar_transacao(t[0], novo_valor, nova_descricao, nova_data)
                     st.success("Transação atualizada!")
         
         st.subheader("Saldo Atual")
