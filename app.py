@@ -17,16 +17,17 @@ def init_db():
                         tipo TEXT,
                         valor REAL,
                         descricao TEXT,
+                        perfil TEXT,  -- Coluna adicionada para o perfil da transação
                         data TEXT)''')
     conn.commit()
     conn.close()
 
 # Função para adicionar transações
-def adicionar_transacao(usuario, tipo, valor, descricao, data):
+def adicionar_transacao(usuario, tipo, valor, descricao, perfil, data):
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO transacoes (usuario, tipo, valor, descricao, data) VALUES (?, ?, ?, ?, ?)",
-                   (usuario, tipo, valor, descricao, data))
+    cursor.execute("INSERT INTO transacoes (usuario, tipo, valor, descricao, perfil, data) VALUES (?, ?, ?, ?, ?, ?)",
+                   (usuario, tipo, valor, descricao, perfil, data))
     conn.commit()
     conn.close()
 
@@ -51,7 +52,7 @@ def obter_saldo(usuario):
 def obter_transacoes_mensais(usuario, mes, ano):
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, data, tipo, valor, descricao FROM transacoes WHERE usuario=? AND strftime('%m', data)=? AND strftime('%Y', data)=?", (usuario, f"{mes:02d}", str(ano)))
+    cursor.execute("SELECT id, data, tipo, valor, descricao, perfil FROM transacoes WHERE usuario=? AND strftime('%m', data)=? AND strftime('%Y', data)=?", (usuario, f"{mes:02d}", str(ano)))
     transacoes = cursor.fetchall()
     conn.close()
     return transacoes
@@ -60,7 +61,7 @@ def obter_transacoes_mensais(usuario, mes, ano):
 def obter_transacoes_usuario(usuario):
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, data, tipo, valor, descricao FROM transacoes WHERE usuario=? ORDER BY data DESC", (usuario,))
+    cursor.execute("SELECT id, data, tipo, valor, descricao, perfil FROM transacoes WHERE usuario=? ORDER BY data DESC", (usuario,))
     transacoes = cursor.fetchall()
     conn.close()
     return transacoes
@@ -120,13 +121,13 @@ elif escolha == "Login":
         tipo_transacao = "entrada" if perfil == "Caixa" else "saida"
         
         if st.button("Adicionar Transação"):
-            adicionar_transacao(st.session_state["usuario"], tipo_transacao, valor, descricao, data_hora)
+            adicionar_transacao(st.session_state["usuario"], tipo_transacao, valor, descricao, perfil, data_hora)
             st.success("Transação adicionada!")
         
         st.subheader("Minhas Transações")
         transacoes = obter_transacoes_usuario(st.session_state["usuario"])
         for t in transacoes:
-            with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}"):
+            with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]} - Perfil: {t[5]}"):
                 novo_valor = st.number_input("Novo Valor", min_value=0.0, value=t[3], format="%.2f", key=f"valor_{t[0]}")
                 nova_descricao = st.text_input("Nova Descrição", value=t[4], key=f"desc_{t[0]}")
                 nova_data = st.text_input("Nova Data e Hora (AAAA-MM-DD HH:MM:SS)", value=t[1], key=f"data_{t[0]}")
@@ -157,7 +158,7 @@ elif escolha == "Supervisor":
         transacoes = obter_transacoes_mensais(usuario_selecionado, mes, ano)
         if transacoes:
             for t in transacoes:
-                st.write(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}")
+                st.write(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]} - Perfil: {t[5]}")
         else:
             st.write("Nenhuma transação encontrada para o período.")
 
