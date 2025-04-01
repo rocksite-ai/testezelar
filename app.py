@@ -106,18 +106,18 @@ elif escolha == "Login":
     if "usuario" in st.session_state:
         st.success(f"Bem-vindo, {st.session_state['usuario']}!")
         
+        perfil = st.selectbox("Perfil da Transação", ["Café da Manhã", "Almoço", "Janta", "Outros Serviços", "Caixa"])
         valor = st.number_input("Valor", min_value=0.0, format="%.2f")
         descricao = st.text_input("Descrição")
         data = st.date_input("Data da transação", value=datetime.today())
         hora = st.time_input("Hora da transação", value=datetime.now().time())
         data_hora = datetime.combine(data, hora).strftime('%Y-%m-%d %H:%M:%S')
         
-        if st.button("Adicionar Receita"):
-            adicionar_transacao(st.session_state["usuario"], "entrada", valor, descricao, data_hora)
-            st.success("Receita adicionada!")
-        if st.button("Adicionar Despesa"):
-            adicionar_transacao(st.session_state["usuario"], "saida", valor, descricao, data_hora)
-            st.success("Despesa adicionada!")
+        tipo_transacao = "entrada" if perfil == "Caixa" else "saida"
+        
+        if st.button("Adicionar Transação"):
+            adicionar_transacao(st.session_state["usuario"], tipo_transacao, valor, descricao, data_hora)
+            st.success("Transação adicionada!")
         
         st.subheader("Minhas Transações")
         transacoes = obter_transacoes_usuario(st.session_state["usuario"])
