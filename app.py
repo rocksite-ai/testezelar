@@ -22,11 +22,19 @@ def init_db():
     conn.close()
 
 # Função para adicionar transações
-def adicionar_transacao(usuario, tipo, valor, descricao):
+def adicionar_transacao(usuario, tipo, valor, descricao, data):
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
     cursor.execute("INSERT INTO transacoes (usuario, tipo, valor, descricao, data) VALUES (?, ?, ?, ?, ?)",
-                   (usuario, tipo, valor, descricao, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                   (usuario, tipo, valor, descricao, data))
+    conn.commit()
+    conn.close()
+
+# Função para atualizar transação
+def atualizar_transacao(transacao_id, novo_valor, nova_descricao):
+    conn = sqlite3.connect("financeiro.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE transacoes SET valor=?, descricao=? WHERE id=?", (novo_valor, nova_descricao, transacao_id))
     conn.commit()
     conn.close()
 
@@ -38,6 +46,24 @@ def obter_saldo(usuario):
     saldo = cursor.fetchone()[0] or 0.0
     conn.close()
     return saldo
+
+# Função para obter transações mensais
+def obter_transacoes_mensais(usuario, mes, ano):
+    conn = sqlite3.connect("financeiro.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, data, tipo, valor, descricao FROM transacoes WHERE usuario=? AND strftime('%m', data)=? AND strftime('%Y', data)=?", (usuario, f"{mes:02d}", str(ano)))
+    transacoes = cursor.fetchall()
+    conn.close()
+    return transacoes
+
+# Função para obter transações do usuário
+def obter_transacoes_usuario(usuario):
+    conn = sqlite3.connect("financeiro.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, data, tipo, valor, descricao FROM transacoes WHERE usuario=? ORDER BY data DESC", (usuario,))
+    transacoes = cursor.fetchall()
+    conn.close()
+    return transacoes
 
 # Interface Streamlit
 st.title("Gestão Financeira - Programa Zelar")
@@ -82,12 +108,26 @@ elif escolha == "Login":
         
         valor = st.number_input("Valor", min_value=0.0, format="%.2f")
         descricao = st.text_input("Descrição")
+        data = st.date_input("Data da transação", value=datetime.today())
+        hora = st.time_input("Hora da transação", value=datetime.now().time())
+        data_hora = datetime.combine(data, hora).strftime('%Y-%m-%d %H:%M:%S')
+        
         if st.button("Adicionar Receita"):
-            adicionar_transacao(st.session_state["usuario"], "entrada", valor, descricao)
+            adicionar_transacao(st.session_state["usuario"], "entrada", valor, descricao, data_hora)
             st.success("Receita adicionada!")
         if st.button("Adicionar Despesa"):
-            adicionar_transacao(st.session_state["usuario"], "saida", valor, descricao)
+            adicionar_transacao(st.session_state["usuario"], "saida", valor, descricao, data_hora)
             st.success("Despesa adicionada!")
+        
+        st.subheader("Minhas Transações")
+        transacoes = obter_transacoes_usuario(st.session_state["usuario"])
+        for t in transacoes:
+            with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}"):
+                novo_valor = st.number_input("Novo Valor", min_value=0.0, value=t[3], format="%.2f", key=f"valor_{t[0]}")
+                nova_descricao = st.text_input("Nova Descrição", value=t[4], key=f"desc_{t[0]}")
+                if st.button("Atualizar", key=f"update_{t[0]}"):
+                    atualizar_transacao(t[0], novo_valor, nova_descricao)
+                    st.success("Transação atualizada!")
         
         st.subheader("Saldo Atual")
         st.write(f"R$ {obter_saldo(st.session_state['usuario']):.2f}")
@@ -102,6 +142,19 @@ elif escolha == "Supervisor":
     
     for usuario, saldo in dados:
         st.write(f"{usuario}: R$ {saldo:.2f}")
+    
+    st.subheader("Relatório Mensal")
+    usuario_selecionado = st.selectbox("Selecionar Colaborador", [d[0] for d in dados])
+    mes = st.selectbox("Mês", list(range(1, 13)))
+    ano = st.selectbox("Ano", list(range(2023, datetime.today().year + 1)))
+    
+    if st.button("Gerar Relatório"):
+        transacoes = obter_transacoes_mensais(usuario_selecionado, mes, ano)
+        if transacoes:
+            for t in transacoes:
+                st.write(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}")
+        else:
+            st.write("Nenhuma transação encontrada para o período.")
 
 # Inicializar banco de dados
 init_db()
