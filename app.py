@@ -110,7 +110,11 @@ elif escolha == "Login":
         valor = st.number_input("Valor", min_value=0.0, format="%.2f")
         descricao = st.text_input("Descrição")
         data = st.date_input("Data da transação", value=datetime.today())
-        hora = st.time_input("Hora da transação", value=datetime.now().time())
+        
+        # A hora agora vai ser preservada após a primeira seleção
+        hora_default = datetime.now().time()
+        hora = st.time_input("Hora da transação", value=hora_default)
+
         data_hora = datetime.combine(data, hora).strftime('%Y-%m-%d %H:%M:%S')
         
         tipo_transacao = "entrada" if perfil == "Caixa" else "saida"
@@ -125,7 +129,7 @@ elif escolha == "Login":
             with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]}"):
                 novo_valor = st.number_input("Novo Valor", min_value=0.0, value=t[3], format="%.2f", key=f"valor_{t[0]}")
                 nova_descricao = st.text_input("Nova Descrição", value=t[4], key=f"desc_{t[0]}")
-                nova_data = st.text_input("Nova Data e Hora (DD-MM-AAAA HH:MM:SS)", value=t[1], key=f"data_{t[0]}")
+                nova_data = st.text_input("Nova Data e Hora (AAAA-MM-DD HH:MM:SS)", value=t[1], key=f"data_{t[0]}")
                 if st.button("Atualizar", key=f"update_{t[0]}"):
                     atualizar_transacao(t[0], novo_valor, nova_descricao, nova_data)
                     st.success("Transação atualizada!")
