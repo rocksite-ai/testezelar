@@ -6,21 +6,37 @@ from datetime import datetime
 def init_db():
     conn = sqlite3.connect("financeiro.db")
     cursor = conn.cursor()
+    
+    # Criação da tabela de usuários, caso não exista
     cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         nome TEXT UNIQUE,
                         senha TEXT,
                         tipo TEXT)''')
+    
+    # Criação da tabela de transações, caso não exista
     cursor.execute('''CREATE TABLE IF NOT EXISTS transacoes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         usuario TEXT,
                         tipo TEXT,
                         valor REAL,
                         descricao TEXT,
-                        perfil TEXT,  -- Coluna adicionada para o perfil da transação
+                        perfil TEXT,  -- Garantir que a coluna 'perfil' exista
                         data TEXT)''')
+    
+    # Verificar se a coluna 'perfil' existe, se não, adicionar
+    try:
+        cursor.execute("PRAGMA table_info(transacoes)")
+        colunas = [col[1] for col in cursor.fetchall()]
+        if 'perfil' not in colunas:
+            cursor.execute("ALTER TABLE transacoes ADD COLUMN perfil TEXT")
+            conn.commit()
+    except Exception as e:
+        print(f"Erro ao verificar/alterar tabela: {e}")
+    
     conn.commit()
     conn.close()
+
 
 # Função para adicionar transações
 def adicionar_transacao(usuario, tipo, valor, descricao, perfil, data):
