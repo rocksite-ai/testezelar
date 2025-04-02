@@ -1,182 +1,83 @@
 import streamlit as st
-import sqlite3
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
 from datetime import datetime
 
-# Configuração do banco de dados
-def init_db():
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    
-    # Criação da tabela de usuários, caso não exista
-    cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        nome TEXT UNIQUE,
-                        senha TEXT,
-                        tipo TEXT)''')
-    
-    # Criação da tabela de transações, caso não exista
-    cursor.execute('''CREATE TABLE IF NOT EXISTS transacoes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        usuario TEXT,
-                        tipo TEXT,
-                        valor REAL,
-                        descricao TEXT,
-                        perfil TEXT,  -- Garantir que a coluna 'perfil' exista
-                        data TEXT)''')
-    
-    # Verificar se a coluna 'perfil' existe, se não, adicionar
-    try:
-        cursor.execute("PRAGMA table_info(transacoes)")
-        colunas = [col[1] for col in cursor.fetchall()]
-        if 'perfil' not in colunas:
-            cursor.execute("ALTER TABLE transacoes ADD COLUMN perfil TEXT")
-            conn.commit()
-    except Exception as e:
-        print(f"Erro ao verificar/alterar tabela: {e}")
-    
-    conn.commit()
-    conn.close()
+# Configurar acesso ao Google Sheets
+SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+CREDENTIALS_FILE = "credenciais.json"
+SPREADSHEET_ID = "11C6rq54LPcSZuTQ0t-JH0zSRByVVvXX85tgFY9tl0qA"
 
+# Autenticação com Google Sheets
+def get_worksheet():
+    creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, SCOPE)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+    return sheet
 
-# Função para adicionar transações
+# Função para adicionar transação
 def adicionar_transacao(usuario, tipo, valor, descricao, perfil, data):
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO transacoes (usuario, tipo, valor, descricao, perfil, data) VALUES (?, ?, ?, ?, ?, ?)",
-                   (usuario, tipo, valor, descricao, perfil, data))
-    conn.commit()
-    conn.close()
+    sheet = get_worksheet()
+    sheet.append_row([usuario, tipo, valor, descricao, perfil, data])
 
-# Função para atualizar transação
-def atualizar_transacao(transacao_id, novo_valor, nova_descricao, nova_data):
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("UPDATE transacoes SET valor=?, descricao=?, data=? WHERE id=?", (novo_valor, nova_descricao, nova_data, transacao_id))
-    conn.commit()
-    conn.close()
-
-# Função para obter saldo
-def obter_saldo(usuario):
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT SUM(CASE WHEN tipo='entrada' THEN valor ELSE -valor END) FROM transacoes WHERE usuario=?", (usuario,))
-    saldo = cursor.fetchone()[0] or 0.0
-    conn.close()
-    return saldo
-
-# Função para obter transações mensais
-def obter_transacoes_mensais(usuario, mes, ano):
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, data, tipo, valor, descricao, perfil FROM transacoes WHERE usuario=? AND strftime('%m', data)=? AND strftime('%Y', data)=?", (usuario, f"{mes:02d}", str(ano)))
-    transacoes = cursor.fetchall()
-    conn.close()
-    return transacoes
-
-# Função para obter transações do usuário
+# Função para obter transações de um usuário
 def obter_transacoes_usuario(usuario):
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, data, tipo, valor, descricao, perfil FROM transacoes WHERE usuario=? ORDER BY data DESC", (usuario,))
-    transacoes = cursor.fetchall()
-    conn.close()
-    return transacoes
+    sheet = get_worksheet()
+    registros = sheet.get_all_records()
+    df = pd.DataFrame(registros)
+    return df[df['usuario'] == usuario] if not df.empty else pd.DataFrame()
+
+# Função para obter saldo de um usuário
+def obter_saldo(usuario):
+    transacoes = obter_transacoes_usuario(usuario)
+    if transacoes.empty:
+        return 0.0
+    return transacoes.apply(lambda x: x['valor'] if x['tipo'] == 'entrada' else -x['valor'], axis=1).sum()
 
 # Interface Streamlit
 st.title("Gestão Financeira - Programa Zelar")
-
 menu = ["Login", "Registrar", "Supervisor"]
 escolha = st.sidebar.selectbox("Menu", menu)
 
-if escolha == "Registrar":
-    st.subheader("Criar Conta")
-    nome = st.text_input("Nome")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Registrar"):
-        conn = sqlite3.connect("financeiro.db")
-        cursor = conn.cursor()
-        try:
-            cursor.execute("INSERT INTO usuarios (nome, senha, tipo) VALUES (?, ?, 'colaborador')", (nome, senha))
-            conn.commit()
-            st.success("Conta criada com sucesso!")
-        except:
-            st.error("Usuário já existe!")
-        conn.close()
-
-elif escolha == "Login":
+if escolha == "Login":
     st.subheader("Login")
     nome = st.text_input("Nome")
     senha = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        conn = sqlite3.connect("financeiro.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM usuarios WHERE nome=? AND senha=?", (nome, senha))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user:
-            st.session_state["usuario"] = nome
-            st.session_state["tipo"] = user[3]
-        else:
-            st.error("Usuário ou senha incorretos")
-    
+        st.session_state["usuario"] = nome
+        st.success(f"Bem-vindo, {nome}!")
+
     if "usuario" in st.session_state:
-        st.success(f"Bem-vindo, {st.session_state['usuario']}!")
-        
-        perfil = st.selectbox("Perfil da Transação", ["Café da Manhã", "Almoço", "Janta", "Outros Serviços", "Caixa"])
+        perfil = st.selectbox("Perfil da Transação", ["Café da Manhã", "Almoço", "Janta", "Outros Serviços","Devolução de Caixa", "Caixa"])
         valor = st.number_input("Valor", min_value=0.0, format="%.2f")
         descricao = st.text_input("Descrição")
         data = st.date_input("Data da transação", value=datetime.today())
-        
-        # A hora agora vai ser preservada após a primeira seleção
-        hora_default = datetime.now().time()
-        hora = st.time_input("Hora da transação", value=hora_default)
-
+        hora = st.time_input("Hora da transação", value=datetime.now().time())
         data_hora = datetime.combine(data, hora).strftime('%Y-%m-%d %H:%M:%S')
-        
         tipo_transacao = "entrada" if perfil == "Caixa" else "saida"
-        
+
         if st.button("Adicionar Transação"):
             adicionar_transacao(st.session_state["usuario"], tipo_transacao, valor, descricao, perfil, data_hora)
             st.success("Transação adicionada!")
-        
+
         st.subheader("Minhas Transações")
         transacoes = obter_transacoes_usuario(st.session_state["usuario"])
-        for t in transacoes:
-            with st.expander(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]} - Perfil: {t[5]}"):
-                novo_valor = st.number_input("Novo Valor", min_value=0.0, value=t[3], format="%.2f", key=f"valor_{t[0]}")
-                nova_descricao = st.text_input("Nova Descrição", value=t[4], key=f"desc_{t[0]}")
-                nova_data = st.text_input("Nova Data e Hora (AAAA-MM-DD HH:MM:SS)", value=t[1], key=f"data_{t[0]}")
-                if st.button("Atualizar", key=f"update_{t[0]}"):
-                    atualizar_transacao(t[0], novo_valor, nova_descricao, nova_data)
-                    st.success("Transação atualizada!")
-        
+        if not transacoes.empty:
+            st.dataframe(transacoes[['data', 'tipo', 'valor', 'descricao', 'perfil']])
+        else:
+            st.write("Nenhuma transação registrada.")
+
         st.subheader("Saldo Atual")
         st.write(f"R$ {obter_saldo(st.session_state['usuario']):.2f}")
-        
+
 elif escolha == "Supervisor":
     st.subheader("Painel do Supervisor")
-    conn = sqlite3.connect("financeiro.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT usuario, SUM(CASE WHEN tipo='entrada' THEN valor ELSE -valor END) as saldo FROM transacoes GROUP BY usuario")
-    dados = cursor.fetchall()
-    conn.close()
-    
-    for usuario, saldo in dados:
-        st.write(f"{usuario}: R$ {saldo:.2f}")
-    
-    st.subheader("Relatório Mensal")
-    usuario_selecionado = st.selectbox("Selecionar Colaborador", [d[0] for d in dados])
-    mes = st.selectbox("Mês", list(range(1, 13)))
-    ano = st.selectbox("Ano", list(range(2023, datetime.today().year + 1)))
-    
-    if st.button("Gerar Relatório"):
-        transacoes = obter_transacoes_mensais(usuario_selecionado, mes, ano)
-        if transacoes:
-            for t in transacoes:
-                st.write(f"{t[1]} - {t[2].capitalize()}: R$ {t[3]:.2f} - {t[4]} - Perfil: {t[5]}")
-        else:
-            st.write("Nenhuma transação encontrada para o período.")
+    sheet = get_worksheet()
+    registros = sheet.get_all_records()
+    df = pd.DataFrame(registros)
 
-# Inicializar banco de dados
-init_db()
+    if not df.empty:
+        st.dataframe(df)
+    else:
+        st.write("Nenhuma transação encontrada.")
