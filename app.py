@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Configuração do Google Sheets
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDS = Credentials.from_service_account_file("service_account.json", scopes=SCOPE)
+CREDS = Credentials.from_service_account_file("credenciais.json", scopes=SCOPE)
 CLIENT = gspread.authorize(CREDS)
 SHEET = CLIENT.open_by_key("11C6rq54LPcSZuTQ0t-JH0zSRByVVvXX85tgFY9tl0qA").sheet1
 
